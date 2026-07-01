@@ -1,0 +1,95 @@
+name: Build and Deploy to EKS
+
+# CI/CD: authenticate to AWS via OIDC (no static keys), build all images, push to
+# ECR, then roll them out to the EKS cluster.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required for requesting the OIDC JWT used to assume the AWS role.
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  EKS_CLUSTER: ${{ vars.EKS_CLUSTER_NAME }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up .NET (for publishing the microservices)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '3.1.x'
+
+      - name: Publish .NET services
+        working-directory: src/Services
+        run: |
+          for svc in Instagram.Services.User Instagram.Services.Post Instagram.Services.Newsfeed; do
+            dotnet publish "./$svc" -c Release -o "./$svc/bin/Docker"
+          done
+
+      - name: Build and push all images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+
+          declare -A CONTEXTS=(
+            [instagram-user]="src/Services/Instagram.Services.User"
+            [instagram-post]="src/Services/Instagram.Services.Post"
+            [instagram-newsfeed]="src/Services/Instagram.Services.Newsfeed"
+            [instagram-web]="src/Web"
+            [instagram-gateway]="src/ApiGateway"
+          )
+
+          for repo in "${!CONTEXTS[@]}"; do
+            image="$REGISTRY/$repo"
+            echo "Building $image:$IMAGE_TAG"
+            docker build -t "$image:$IMAGE_TAG" -t "$image:latest" "${CONTEXTS[$repo]}"
+            docker push "$image:$IMAGE_TAG"
+            docker push "$image:latest"
+          done
+
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
+
+      - name: Set image tags and deploy
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        working-directory: deploy/k8s
+        run: |
+          set -euo pipefail
+          for repo in instagram-user instagram-post instagram-newsfeed instagram-web instagram-gateway; do
+            kustomize edit set image "$repo=$REGISTRY/$repo:$IMAGE_TAG"
+          done
+          kubectl apply -k .
+
+      - name: Wait for rollouts
+        run: |
+          set -euo pipefail
+          for dep in user post newsfeed web gateway; do
+            kubectl rollout status deployment/"$dep" -n instagram --timeout=180s
+          done

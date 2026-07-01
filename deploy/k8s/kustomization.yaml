@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: instagram
+
+resources:
+  - namespace.yaml
+  - secret.yaml
+  - databases.yaml
+  - user.yaml
+  - post.yaml
+  - newsfeed.yaml
+  - web.yaml
+  - gateway.yaml
+
+# Seed the MySQL databases. These are copies of scripts/mysql/*.sql kept inside the
+# kustomize root so `kubectl apply -k` works without relaxed load restrictions.
+configMapGenerator:
+  - name: mysql-initdb
+    files:
+      - db-init/migrate-user-service.sql
+      - db-init/migrate-post-service.sql
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+# CI rewrites these to the ECR repo + image tag, e.g.:
+#   kustomize edit set image instagram-user=<acct>.dkr.ecr.<region>.amazonaws.com/instagram-user:<sha>
+images:
+  - name: instagram-user
+    newTag: latest
+  - name: instagram-post
+    newTag: latest
+  - name: instagram-newsfeed
+    newTag: latest
+  - name: instagram-web
+    newTag: latest
+  - name: instagram-gateway
+    newTag: latest

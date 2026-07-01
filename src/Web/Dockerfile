@@ -1,22 +1,21 @@
-# pull official base image
-FROM node:lts-alpine
+# syntax=docker/dockerfile:1
 
-# set working directory
+# ---- Build stage: compile the Vite app to static assets ----
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# add `/app/node_modules/.bin` to $PATH
-ENV PATH /app/node_modules/.bin:$PATH
+COPY package.json package-lock.json* ./
+RUN npm install
 
-# install app dependencies
-COPY package.json ./
-COPY package-lock.json ./
-RUN npm install --silent
-# RUN npm install react-scripts@3.3.0 -g --silent
-
-# add app
 COPY . ./
+RUN npm run build
+
+# ---- Runtime stage: serve the static build with nginx ----
+FROM nginx:alpine AS runtime
+
+# SPA config listens on 3000 so the existing API gateway upstream (web:3000) is unchanged.
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 3000
-
-# start app
-CMD ["npm", "start"]
+CMD ["nginx", "-g", "daemon off;"]

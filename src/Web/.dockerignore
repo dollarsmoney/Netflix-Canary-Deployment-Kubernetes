@@ -1,5 +1,8 @@
 node_modules
 build
+dist
+.git
 .dockerignore
 Dockerfile
 Dockerfile.prod
+npm-debug.log

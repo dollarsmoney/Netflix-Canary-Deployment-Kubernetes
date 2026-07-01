@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: post
+  namespace: instagram
+spec:
+  selector:
+    app: post
+  ports:
+    - port: 9001
+      targetPort: 9001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: post
+  namespace: instagram
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: post
+  template:
+    metadata:
+      labels:
+        app: post
+    spec:
+      containers:
+        - name: post
+          image: instagram-post
+          ports:
+            - containerPort: 9001
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: instagram-secrets
+                  key: post-db-connection
+            - name: AzureBlobStorageConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: instagram-secrets
+                  key: azure-blob-connection
+            - name: rabbitmq__Hostnames__0
+              value: rabbitmq
+            - name: jwt__secretKey
+              valueFrom:
+                secretKeyRef:
+                  name: instagram-secrets
+                  key: jwt-secret
+          readinessProbe:
+            tcpSocket:
+              port: 9001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9001
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 700Mi

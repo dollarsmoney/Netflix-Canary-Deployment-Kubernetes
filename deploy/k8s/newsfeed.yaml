@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: newsfeed
+  namespace: instagram
+spec:
+  selector:
+    app: newsfeed
+  ports:
+    - port: 9002
+      targetPort: 9002
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: newsfeed
+  namespace: instagram
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: newsfeed
+  template:
+    metadata:
+      labels:
+        app: newsfeed
+    spec:
+      containers:
+        - name: newsfeed
+          image: instagram-newsfeed
+          ports:
+            - containerPort: 9002
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: mongo__connectionString
+              valueFrom:
+                secretKeyRef:
+                  name: instagram-secrets
+                  key: mongo-connection
+            - name: rabbitmq__Hostnames__0
+              value: rabbitmq
+            - name: jwt__secretKey
+              valueFrom:
+                secretKeyRef:
+                  name: instagram-secrets
+                  key: jwt-secret
+          readinessProbe:
+            tcpSocket:
+              port: 9002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9002
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+            limits:
+              memory: 512Mi

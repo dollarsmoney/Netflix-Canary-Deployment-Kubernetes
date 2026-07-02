@@ -12,6 +12,8 @@ resources:
   - newsfeed.yaml
   - web.yaml
   - gateway.yaml
+  # Enable only if `kubectl get sc` shows no default StorageClass (see storageclass.yaml):
+  # - storageclass.yaml
 
 # Seed the MySQL databases. These are copies of scripts/mysql/*.sql kept inside the
 # kustomize root so `kubectl apply -k` works without relaxed load restrictions.

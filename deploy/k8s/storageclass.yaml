@@ -1,0 +1,19 @@
+# Default StorageClass backed by the EBS CSI driver.
+#
+# Only apply this if `kubectl get sc` shows NO class marked "(default)". EKS ships a
+# `gp2` StorageClass; on some cluster versions it is NOT annotated as default, which
+# leaves the instagram PVCs (they omit storageClassName) stuck in Pending. Enabling
+# this makes gp3 the default. Do NOT enable it if a default class already exists —
+# Kubernetes rejects having two default StorageClasses.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete

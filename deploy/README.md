@@ -68,3 +68,13 @@ Open `http://<EXTERNAL-IP>/` in a browser.
   ingress (or NLB + TLS) in front of it for HTTPS.
 - Demo credentials in `k8s/secret.yaml` are carried over from docker-compose. Replace them
   before any real use.
+
+## Troubleshooting: storage / EBS CSI
+
+- The `aws-ebs-csi-driver` addon is given a dedicated IRSA role (`deploy/terraform/ebs-csi.tf`).
+  If `ebs-csi-controller` pods CrashLoopBackOff with `UnauthorizedOperation ...
+  ec2:DescribeAvailabilityZones`, re-run `terraform apply` — the role/addon wiring is what
+  fixes it.
+- If PVCs stay `Pending`, check `kubectl get sc`. If no class is marked `(default)`, enable
+  `k8s/storageclass.yaml` (uncomment it in `k8s/kustomization.yaml`) and re-apply. Do not
+  enable it if a default class already exists.

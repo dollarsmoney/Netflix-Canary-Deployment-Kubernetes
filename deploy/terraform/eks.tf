@@ -14,12 +14,12 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  # Managed addons. The EBS CSI driver is required for the StatefulSet PVCs (gp2/gp3).
+  # Core managed addons. The aws-ebs-csi-driver addon is managed separately in
+  # ebs-csi.tf so it can be given a dedicated IRSA role (avoids a module cycle).
   cluster_addons = {
-    coredns            = {}
-    kube-proxy         = {}
-    vpc-cni            = {}
-    aws-ebs-csi-driver = {}
+    coredns    = {}
+    kube-proxy = {}
+    vpc-cni    = {}
   }
 
   eks_managed_node_groups = {

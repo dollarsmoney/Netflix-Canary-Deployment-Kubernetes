@@ -94,3 +94,4 @@ CQRS pattern, Hangfire Job processing, RabbitMq Message Bus, Jwt Authentication,
 ### My Social Media:
 https://www.instagram.com/subisubhan \
 https://www.facebook.com/mohammad.subhan.581
+Itoje dollars

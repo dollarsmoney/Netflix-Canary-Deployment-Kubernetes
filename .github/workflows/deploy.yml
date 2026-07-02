@@ -90,6 +90,8 @@ jobs:
       - name: Wait for rollouts
         run: |
           set -euo pipefail
+          # Services restart a few times on first boot while MySQL/RabbitMQ come up,
+          # so allow generous time for the deployments to stabilize.
           for dep in user post newsfeed web gateway; do
-            kubectl rollout status deployment/"$dep" -n instagram --timeout=180s
+            kubectl rollout status deployment/"$dep" -n instagram --timeout=420s
           done

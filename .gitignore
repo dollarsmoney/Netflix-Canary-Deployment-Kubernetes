@@ -439,6 +439,11 @@ dist/
 .vite/
 
 ##
+## Argo CD (never commit the real repo-credentials secret)
+##
+deploy/argocd/repo-secret.yaml
+
+##
 ## Terraform
 ##
 .terraform/

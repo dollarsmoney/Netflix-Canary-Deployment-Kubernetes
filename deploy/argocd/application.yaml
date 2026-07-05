@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: instagram
+  namespace: argocd
+  finalizers:
+    # Ensures child resources are pruned when the Application is deleted.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: instagram
+
+  # GitHub is the single source of truth. Argo CD renders the kustomize overlay
+  # under deploy/k8s and continuously reconciles the cluster to match it.
+  source:
+    repoURL: https://github.com/dollarsmoney/Netflix-Canary-Deployment-Kubernetes.git
+    targetRevision: main
+    path: deploy/k8s
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: instagram
+
+  syncPolicy:
+    automated:
+      prune: true      # delete resources removed from Git
+      selfHeal: true   # revert manual (kubectl) changes back to Git state
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+
+  # The MySQL/Mongo StatefulSets settle after a few restarts while databases boot,
+  # and Deployment replica counts fluctuate during rollout. Ignore those so Argo
+  # doesn't flap between Synced/OutOfSync.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

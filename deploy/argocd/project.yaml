@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: instagram
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Instagram clone microservices
+  # Only this Git repo may be used as a source of truth for this project.
+  sourceRepos:
+    - https://github.com/dollarsmoney/Netflix-Canary-Deployment-Kubernetes.git
+  # Only allow deploying into this cluster + namespace.
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: instagram
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  # The app creates a couple of cluster-scoped resources (Namespace, StorageClass).
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: storage.k8s.io
+      kind: StorageClass
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

@@ -1,16 +1,16 @@
-name: Build and Deploy to EKS
+name: Build and Publish images (GitOps)
 
-# CI/CD: authenticate to AWS via OIDC (no static keys), build all images, push to
-# ECR, then roll them out to the EKS cluster.
+# CI: authenticate to AWS via OIDC (no static keys), build all images, push to ECR,
+# then commit the new image tags into deploy/k8s/kustomization.yaml. Argo CD watches
+# that path and performs the actual rollout to EKS (Git is the source of truth).
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# Required for requesting the OIDC JWT used to assume the AWS role.
 permissions:
-  id-token: write
-  contents: read
+  id-token: write   # request the OIDC JWT used to assume the AWS role
+  contents: write   # commit the image-tag bump back to the repo
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}   # stay on the branch so we can push the tag bump
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -73,10 +75,7 @@ jobs:
           curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
           sudo mv kustomize /usr/local/bin/
 
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name "$EKS_CLUSTER" --region "$AWS_REGION"
-
-      - name: Set image tags and deploy
+      - name: Pin new image tags in Git
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         working-directory: deploy/k8s
@@ -85,13 +84,17 @@ jobs:
           for repo in instagram-user instagram-post instagram-newsfeed instagram-web instagram-gateway; do
             kustomize edit set image "$repo=$REGISTRY/$repo:$IMAGE_TAG"
           done
-          kubectl apply -k .
 
-      - name: Wait for rollouts
+      - name: Commit and push image bump (Argo CD deploys it)
         run: |
           set -euo pipefail
-          # Services restart a few times on first boot while MySQL/RabbitMQ come up,
-          # so allow generous time for the deployments to stabilize.
-          for dep in user post newsfeed web gateway; do
-            kubectl rollout status deployment/"$dep" -n instagram --timeout=420s
-          done
+          if git diff --quiet -- deploy/k8s/kustomization.yaml; then
+            echo "No image changes to commit."; exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/k8s/kustomization.yaml
+          # [skip ci] + the fact that pushes made with GITHUB_TOKEN don't trigger
+          # workflows keeps this from looping.
+          git commit -m "Deploy ${IMAGE_TAG} [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
